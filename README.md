@@ -1,3 +1,3 @@
 # lekce-forecast
 
-Stránka: https://jemolotrab.github.io/lekce-forecast/
+[Lyceum - Předpověď Lekcí](https://jemolotrab.github.io/lekce-forecast/)
