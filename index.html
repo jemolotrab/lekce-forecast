@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Předpověď lekcí</title>
+<style>
+  :root{
+    --board-bg: #1f3a2e;
+    --board-bg-2: #16291f;
+    --chalk: #f2efe1;
+    --chalk-dim: #b9c4ba;
+    --sun: #e8b923;
+    --storm: #c1502e;
+    --calm: #5a92ad;
+    --rule: rgba(242,239,225,0.14);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(255,255,255,0.05), transparent 60%),
+      linear-gradient(180deg, var(--board-bg), var(--board-bg-2));
+    color:var(--chalk);
+    font-family: 'Georgia', 'Iowan Old Style', serif;
+    min-height:100vh;
+    padding:32px 20px 60px;
+  }
+  .wrap{max-width:920px;margin:0 auto;}
+  header{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    border-bottom:2px solid var(--rule);
+    padding-bottom:18px;
+    margin-bottom:28px;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  h1{
+    font-size:34px;
+    font-weight:400;
+    letter-spacing:0.3px;
+    margin:0;
+  }
+  h1 em{font-style:italic;color:var(--sun);}
+  .subtitle{
+    font-family: 'Courier New', monospace;
+    font-size:13px;
+    color:var(--chalk-dim);
+  }
+  .strip{
+    display:grid;
+    grid-template-columns:repeat(5, 1fr);
+    gap:14px;
+    margin-bottom:36px;
+  }
+  @media (max-width: 760px){
+    .strip{grid-template-columns:repeat(2,1fr);}
+  }
+  .day-card{
+    background:rgba(255,255,255,0.03);
+    border:1px solid var(--rule);
+    border-radius:3px;
+    padding:16px 14px;
+    cursor:pointer;
+    transition:background 0.15s ease, transform 0.15s ease;
+  }
+  .day-card:hover{
+    background:rgba(255,255,255,0.06);
+    transform:translateY(-2px);
+  }
+  .day-card.selected{
+    background:rgba(255,255,255,0.08);
+    border-color:rgba(242,239,225,0.35);
+  }
+  .day-name{
+    font-family:'Courier New', monospace;
+    font-size:12px;
+    letter-spacing:1px;
+    color:var(--chalk-dim);
+    margin-bottom:10px;
+  }
+  .day-icon{font-size:30px;margin-bottom:8px;line-height:1;}
+  .day-subject{font-size:16px;margin-bottom:4px;}
+  .day-temp{
+    font-family:'Courier New', monospace;
+    font-size:13px;
+    color:var(--chalk-dim);
+  }
+  .detail{
+    border-top:1px dashed var(--rule);
+    padding-top:24px;
+  }
+  .detail-head{
+    display:flex;
+    align-items:baseline;
+    gap:14px;
+    margin-bottom:6px;
+    flex-wrap:wrap;
+  }
+  .detail-head .icon{font-size:44px;}
+  .detail-head h2{font-weight:400;font-size:26px;margin:0;}
+  .detail-teacher{color:var(--chalk-dim);font-size:14px;margin-bottom:20px;font-style:italic;}
+  .readouts{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:14px;
+    margin-bottom:22px;
+  }
+  @media (max-width:600px){.readouts{grid-template-columns:1fr;}}
+  .readout{
+    border:1px solid var(--rule);
+    border-radius:3px;
+    padding:14px;
+  }
+  .readout-label{
+    font-family:'Courier New', monospace;
+    font-size:11px;
+    color:var(--chalk-dim);
+    margin-bottom:8px;
+  }
+  .bar-track{
+    height:8px;
+    background:rgba(255,255,255,0.08);
+    border-radius:4px;
+    overflow:hidden;
+    margin-bottom:8px;
+  }
+  .bar-fill{height:100%;border-radius:4px;}
+  .readout-value{font-family:'Courier New', monospace;font-size:15px;}
+  .forecast-text{
+    background:rgba(255,255,255,0.04);
+    border-left:3px solid var(--sun);
+    padding:14px 16px;
+    font-size:15px;
+    line-height:1.55;
+    margin-bottom:22px;
+  }
+  .history{
+    font-family:'Courier New', monospace;
+    font-size:12px;
+    color:var(--chalk-dim);
+    line-height:1.9;
+  }
+  .history-row{
+    display:flex;
+    gap:12px;
+  }
+  .history-row span{min-width:70px;}
+  footer{
+    margin-top:40px;
+    font-family:'Courier New', monospace;
+    font-size:11px;
+    color:var(--chalk-dim);
+    border-top:1px solid var(--rule);
+    padding-top:16px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Předpověď <em>lekcí</em></h1>
+      <div class="subtitle">na základě historických dat &mdash; prototyp</div>
+    </div>
+    <div class="subtitle" id="week-label"></div>
+  </header>
+
+  <div class="strip" id="strip"></div>
+
+  <div class="detail" id="detail"></div>
+
+  <footer id="footer-note"></footer>
+
+</div>
+
+<script>
+// ---- MOCK HISTORICAL DATA ----
+// Each entry: one past occurrence of a lesson with ratings out of 5
+// difficulty: how hard it was, mood: teacher's mood/happiness, quality: how good the lesson was
+const history = {
+  "Matematika": {
+    teacher: "p. Nováková",
+    entries: [
+      {date:"2026-08-25", difficulty:4, mood:2, quality:3},
+      {date:"2026-09-01", difficulty:5, mood:2, quality:2},
+      {date:"2026-09-08", difficulty:4, mood:3, quality:3},
+    ]
+  },
+  "Tělocvik": {
+    teacher: "p. Dvořák",
+    entries: [
+      {date:"2026-08-26", difficulty:1, mood:5, quality:5},
+      {date:"2026-09-02", difficulty:2, mood:4, quality:5},
+      {date:"2026-09-09", difficulty:1, mood:5, quality:4},
+    ]
+  },
+  "Chemie": {
+    teacher: "p. Horáková",
+    entries: [
+      {date:"2026-08-27", difficulty:5, mood:1, quality:2},
+      {date:"2026-09-03", difficulty:5, mood:2, quality:2},
+      {date:"2026-09-10", difficulty:4, mood:1, quality:2},
+    ]
+  },
+  "Angličtina": {
+    teacher: "p. Svoboda",
+    entries: [
+      {date:"2026-08-28", difficulty:2, mood:4, quality:4},
+      {date:"2026-09-04", difficulty:3, mood:4, quality:4},
+      {date:"2026-09-11", difficulty:2, mood:5, quality:5},
+    ]
+  },
+  "Dějepis": {
+    teacher: "p. Kučera",
+    entries: [
+      {date:"2026-08-29", difficulty:3, mood:3, quality:3},
+      {date:"2026-09-05", difficulty:2, mood:3, quality:4},
+      {date:"2026-09-12", difficulty:3, mood:4, quality:3},
+    ]
+  }
+};
+
+// upcoming week: which subject falls on which day
+const upcoming = [
+  {day:"Po", subject:"Matematika"},
+  {day:"Út", subject:"Tělocvik"},
+  {day:"St", subject:"Chemie"},
+  {day:"Čt", subject:"Angličtina"},
+  {day:"Pá", subject:"Dějepis"},
+];
+
+function avg(arr){ return arr.reduce((a,b)=>a+b,0)/arr.length; }
+
+function trend(entries, key){
+  // simple trend: compare average of first half vs second half
+  const mid = Math.floor(entries.length/2);
+  const first = avg(entries.slice(0,mid+1).map(e=>e[key]));
+  const second = avg(entries.slice(mid).map(e=>e[key]));
+  return second - first;
+}
+
+function forecastFor(subject){
+  const data = history[subject];
+  const difficulty = avg(data.entries.map(e=>e.difficulty));
+  const mood = avg(data.entries.map(e=>e.mood));
+  const quality = avg(data.entries.map(e=>e.quality));
+  const diffTrend = trend(data.entries, "difficulty");
+  const moodTrend = trend(data.entries, "mood");
+  return {subject, teacher:data.teacher, difficulty, mood, quality, diffTrend, moodTrend, entries:data.entries};
+}
+
+function iconFor(f){
+  // choose a "weather" icon from difficulty + mood
+  if(f.difficulty >= 4 && f.mood <= 2) return "⛈️";
+  if(f.difficulty >= 4) return "🌧️";
+  if(f.difficulty >= 2.5 && f.mood <= 2.5) return "☁️";
+  if(f.difficulty <= 2 && f.mood >= 4) return "☀️";
+  return "⛅";
+}
+
+function forecastText(f){
+  const parts = [];
+  if(f.difficulty >= 4) parts.push(`${f.subject} vychází jako náročná — připrav se na hodně počítání/myšlení navíc.`);
+  else if(f.difficulty <= 2) parts.push(`${f.subject} by měla být v pohodě, nic co by tě zaskočilo.`);
+  else parts.push(`${f.subject} bude střední zátěž, nic dramatického.`);
+
+  if(f.diffTrend > 0.3) parts.push("V poslední době to navíc spíš přituhuje.");
+  else if(f.diffTrend < -0.3) parts.push("Poslední lekce byly ale o dost lehčí než dřív.");
+
+  if(f.mood <= 2) parts.push(`${f.teacher.split(" ")[1] || f.teacher} nebývá v nejlepší náladě, takže radši žádné pozdní příchody.`);
+  else if(f.mood >= 4) parts.push(`${f.teacher} bývá v pohodě, takže atmosféra by měla být příjemná.`);
+
+  return parts.join(" ");
+}
+
+const strip = document.getElementById("strip");
+const detail = document.getElementById("detail");
+const weekLabel = document.getElementById("week-label");
+const footerNote = document.getElementById("footer-note");
+
+weekLabel.textContent = "týden 16.–20. 9. 2026";
+footerNote.textContent = "Data jsou zatím vymyšlená — jde jen o prototyp, jak by to mohlo fungovat, až budeme sbírat skutečné hodnocení po každé lekci.";
+
+let selected = 0;
+
+function render(){
+  strip.innerHTML = "";
+  upcoming.forEach((u, i) => {
+    const f = forecastFor(u.subject);
+    const card = document.createElement("div");
+    card.className = "day-card" + (i === selected ? " selected" : "");
+    card.innerHTML = `
+      <div class="day-name">${u.day}</div>
+      <div class="day-icon">${iconFor(f)}</div>
+      <div class="day-subject">${u.subject}</div>
+      <div class="day-temp">obtížnost ${f.difficulty.toFixed(1)}/5</div>
+    `;
+    card.addEventListener("click", () => { selected = i; render(); });
+    strip.appendChild(card);
+  });
+
+  const u = upcoming[selected];
+  const f = forecastFor(u.subject);
+
+  const bar = (value, color) => `
+    <div class="bar-track"><div class="bar-fill" style="width:${(value/5*100)}%; background:${color};"></div></div>
+  `;
+
+  detail.innerHTML = `
+    <div class="detail-head">
+      <div class="icon">${iconFor(f)}</div>
+      <h2>${u.subject} — ${u.day}</h2>
+    </div>
+    <div class="detail-teacher">${f.teacher}</div>
+
+    <div class="readouts">
+      <div class="readout">
+        <div class="readout-label">OBTÍŽNOST</div>
+        ${bar(f.difficulty, "var(--storm)")}
+        <div class="readout-value">${f.difficulty.toFixed(1)} / 5 ${f.diffTrend>0.3?"↑":f.diffTrend<-0.3?"↓":"→"}</div>
+      </div>
+      <div class="readout">
+        <div class="readout-label">NÁLADA UČITELE</div>
+        ${bar(f.mood, "var(--sun)")}
+        <div class="readout-value">${f.mood.toFixed(1)} / 5 ${f.moodTrend>0.3?"↑":f.moodTrend<-0.3?"↓":"→"}</div>
+      </div>
+      <div class="readout">
+        <div class="readout-label">KVALITA LEKCE</div>
+        ${bar(f.quality, "var(--calm)")}
+        <div class="readout-value">${f.quality.toFixed(1)} / 5</div>
+      </div>
+    </div>
+
+    <div class="forecast-text">${forecastText(f)}</div>
+
+    <div class="readout-label" style="margin-bottom:10px;">POSLEDNÍ ZÁZNAMY</div>
+    <div class="history">
+      ${f.entries.map(e => `<div class="history-row"><span>${e.date}</span><span>obtížnost ${e.difficulty}</span><span>nálada ${e.mood}</span><span>kvalita ${e.quality}</span></div>`).join("")}
+    </div>
+  `;
+}
+
+render();
+</script>
+</body>
+</html>
